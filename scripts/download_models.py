@@ -25,21 +25,17 @@ SHERPA_BASE = "https://github.com/k2-fsa/sherpa-onnx/releases/download"
 MODELS = [
     {
         "name": "pyannote-segmentation-3.0",
-        "url": f"{SHERPA_BASE}/asr-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
+        "url": f"{SHERPA_BASE}/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
         "archive": "sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
         "check_file": "sherpa-onnx-pyannote-segmentation-3-0/model.onnx",
     },
     {
-        "name": "CAM++ speaker embeddings",
-        "url": f"{SHERPA_BASE}/speaker-recog-models/3dspeaker_speech_campplus_sv_zh-cn_16k-common_advanced.onnx",
-        "archive": "3dspeaker_speech_campplus_sv_zh-cn_16k-common_advanced.onnx",
-        "check_file": "3dspeaker_speech_campplus_sv_zh-cn_16k-common_advanced.onnx",
-    },
-    {
-        "name": "Silero VAD",
-        "url": f"{SHERPA_BASE}/asr-models/silero_vad.onnx",
-        "archive": "silero_vad.onnx",
-        "check_file": "silero_vad.onnx",
+        # English CAM++ model (voxceleb-trained — good for English sessions)
+        # tag has a typo: "recongition" not "recognition" — that's the real tag
+        "name": "CAM++ speaker embeddings (English)",
+        "url": f"{SHERPA_BASE}/speaker-recongition-models/3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx",
+        "archive": "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx",
+        "check_file": "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx",
     },
 ]
 

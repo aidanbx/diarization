@@ -22,14 +22,16 @@ def _make_stub_segmenter():
             return SegmentationFrames(frames=[SpeakerFrame(timestamp=0.0, scores=[1.0])], frame_shift_s=0.0, audio_hash="")
 
         def run_full(self, audio):
-            segs = []
-            for i, (s, e, spk) in enumerate([(0.0, 8.0, 0), (10.0, 18.0, 1), (20.0, 28.0, 0)]):
+            raw_segs = []
+            for s, e, spk in [(0.0, 8.0, 0), (10.0, 18.0, 1), (20.0, 28.0, 0)]:
                 seg = MagicMock()
                 seg.start = s
                 seg.end = e
                 seg.speaker = spk
-                segs.append(seg)
-            return segs
+                raw_segs.append(seg)
+            result = MagicMock()
+            result.sort_by_start_time.return_value = raw_segs
+            return result
     return StubSegmenter()
 
 

@@ -4,6 +4,8 @@ __pycache__/
 .cache/
 models/
 output/
+data/
 .DS_Store
+.claude/
 *.wav
 !tests/fixtures/*.wav

@@ -5,16 +5,16 @@ engine:
 models_dir: models/
 
 segmenter:
-  model: sherpa-onnx-pyannote-segmentation-3.0
+  model: sherpa-onnx-pyannote-segmentation-3-0
   # pyannote segmentation-3.0 ONNX (bundled in sherpa-onnx releases)
 
 embedder:
-  model: 3dspeaker_speech_campplus_sv_zh-cn_16k-common
-  # CAM++ speaker embedding model
+  model: 3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx
+  # CAM++ English speaker embedding model (voxceleb-trained)
 
 asr:
   model: mlx-community/whisper-large-v3-mlx
-  # use whisper-base-mlx for fast dev iteration
+  # use mlx-community/whisper-base-mlx for fast dev iteration
 
 vad:
   threshold: 0.5

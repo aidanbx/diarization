@@ -37,8 +37,7 @@ class PipelineConfig(BaseModel):
     cache_dir: str = ".cache/"
     output_dir: str = "output/"
     segmenter_model: str = "sherpa-onnx-pyannote-segmentation-3-0/model.onnx"
-    embedding_model: str = "3dspeaker_speech_campplus_sv_zh-cn_16k-common_advanced.onnx"
-    vad_model: str = "silero_vad.onnx"
+    embedding_model: str = "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx"
     asr_model: str = "mlx-community/whisper-large-v3-mlx"
     language: str | None = None
     cluster_threshold: float = 0.7
@@ -54,8 +53,7 @@ class PipelineConfig(BaseModel):
             cache_dir=raw.get("cache_dir", ".cache/"),
             output_dir=raw.get("output_dir", "output/"),
             segmenter_model=str(Path(models_dir) / raw["segmenter"]["model"] / "model.onnx"),
-            embedding_model=str(Path(models_dir) / "3dspeaker_speech_campplus_sv_zh-cn_16k-common_advanced.onnx"),
-            vad_model=str(Path(models_dir) / "silero_vad.onnx"),
+            embedding_model=str(Path(models_dir) / raw["embedder"]["model"]),
             asr_model=raw["asr"]["model"],
             cluster_threshold=raw["cluster"]["threshold"],
             vad_threshold=raw["vad"]["threshold"],
@@ -75,10 +73,7 @@ class Pipeline:
         from diarizer.engines.mlx_whisper import MlxWhisperAsr
 
         cfg = self.cfg
-        self._vad_engine = SherpaOnnxVad(
-            model_path=cfg.vad_model,
-            threshold=cfg.vad_threshold,
-        )
+        self._vad_engine = SherpaOnnxVad()
         self._segmenter_engine = SherpaOnnxSegmenter(
             segmentation_model=cfg.segmenter_model,
             embedding_model=cfg.embedding_model,
@@ -187,13 +182,15 @@ class Pipeline:
         """Use sherpa-onnx's full diarization to produce initial speaker labels."""
         from diarizer.schemas import SpeakerLabel, SpeakerLabels
         print("  [segment] running sherpa-onnx diarization...")
-        results = self._segmenter_engine.run_full(audio)
+        result = self._segmenter_engine.run_full(audio)
+        segs = result.sort_by_start_time()
         labels: list[SpeakerLabel] = []
         speaker_ids: set[str] = set()
-        for i, seg in enumerate(results):
+        for i, seg in enumerate(segs):
             sid = f"SPEAKER_{seg.speaker:02d}"
             labels.append(SpeakerLabel(segment_id=i, start=seg.start, end=seg.end, speaker_id=sid))
             speaker_ids.add(sid)
+        print(f"  [segment] {len(labels)} segments, {len(speaker_ids)} speakers detected")
         return SpeakerLabels(labels=labels, num_speakers=len(speaker_ids), audio_hash=meta.hash)
 
     def _run_embed(self, audio: np.ndarray, meta: AudioInput, segments: SpeakerLabels) -> SpeakerEmbeddings:

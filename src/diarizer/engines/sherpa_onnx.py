@@ -24,36 +24,27 @@ from diarizer.schemas import (
 
 
 class SherpaOnnxVad(Vad):
-    def __init__(self, model_path: str | Path, threshold: float = 0.5,
-                 min_speech_ms: int = 250, min_silence_ms: int = 100, sr: int = 16000):
-        config = sherpa_onnx.VadModelConfig(
-            silero_vad=sherpa_onnx.SileroVadModelConfig(
-                model=str(model_path),
-                threshold=threshold,
-                min_silence_duration=min_silence_ms / 1000.0,
-                min_speech_duration=min_speech_ms / 1000.0,
-            ),
-            sample_rate=sr,
-        )
-        self._vad = sherpa_onnx.VoiceActivityDetector(config, buffer_size_in_seconds=30)
+    """Stub VAD — sherpa-onnx OfflineSpeakerDiarization handles VAD internally.
+
+    This returns the full audio as a single speech region. The real VAD pass
+    happens inside SherpaOnnxSegmenter.run_full(). A standalone Silero VAD
+    could be wired here in future if pre-filtering long silences is needed.
+    """
 
     def run(self, audio: np.ndarray, sr: int) -> SpeechRegions:
-        self._vad.accept_waveform(audio)
-        self._vad.flush()
-        regions: list[SpeechRegion] = []
-        while not self._vad.empty():
-            seg = self._vad.front
-            regions.append(SpeechRegion(start=seg.start, end=seg.start + seg.duration))
-            self._vad.pop()
-        return SpeechRegions(regions=regions, audio_hash="")
+        duration = len(audio) / sr
+        return SpeechRegions(
+            regions=[SpeechRegion(start=0.0, end=duration)],
+            audio_hash="",
+        )
 
 
 class SherpaOnnxSegmenter(Segmenter):
-    """Wraps the sherpa-onnx offline speaker diarization pipeline for segmentation.
+    """Wraps the sherpa-onnx offline speaker diarization pipeline.
 
     sherpa-onnx bundles pyannote-segmentation-3.0 ONNX + CAM++ embeddings in a
-    single OfflineSpeakerDiarization object. We use it here only for the
-    segmentation frame scores; clustering is done separately in stages/cluster.py.
+    single OfflineSpeakerDiarization object. run_full() returns the final
+    speaker segments; clustering is done internally by sherpa-onnx.
     """
 
     def __init__(
@@ -63,20 +54,19 @@ class SherpaOnnxSegmenter(Segmenter):
         num_speakers: int = -1,  # -1 = auto
         cluster_threshold: float = 0.5,
     ):
-        seg_config = sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
-            model=str(segmentation_model),
-        )
-        emb_config = sherpa_onnx.SpeakerEmbeddingExtractorConfig(
-            model=str(embedding_model),
-        )
-        cluster_config = sherpa_onnx.FastClusteringConfig(
-            num_clusters=num_speakers,
-            threshold=cluster_threshold,
-        )
         diar_config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
-            segmentation=seg_config,
-            embedding=emb_config,
-            clustering=cluster_config,
+            segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
+                pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(
+                    model=str(segmentation_model),
+                ),
+            ),
+            embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(
+                model=str(embedding_model),
+            ),
+            clustering=sherpa_onnx.FastClusteringConfig(
+                num_clusters=num_speakers,
+                threshold=cluster_threshold,
+            ),
             min_duration_on=0.3,
             min_duration_off=0.5,
         )
@@ -89,8 +79,8 @@ class SherpaOnnxSegmenter(Segmenter):
         frames = [SpeakerFrame(timestamp=0.0, scores=[1.0])]
         return SegmentationFrames(frames=frames, frame_shift_s=0.0, audio_hash="")
 
-    def run_full(self, audio: np.ndarray) -> list[sherpa_onnx.OfflineSpeakerDiarizationResult]:
-        """Run the full sherpa-onnx diarization and return raw results."""
+    def run_full(self, audio: np.ndarray) -> sherpa_onnx.OfflineSpeakerDiarizationResult:
+        """Run the full sherpa-onnx diarization and return the result object."""
         return self._diarizer.process(audio)
 
 
@@ -112,7 +102,8 @@ class SherpaOnnxEmbedder(Embedder):
             stream = self._extractor.create_stream()
             stream.accept_waveform(sample_rate=sr, waveform=chunk)
             stream.input_finished()
-            embedding = self._extractor.compute(stream).tolist()
+            raw = self._extractor.compute(stream)
+            embedding = raw.tolist() if hasattr(raw, "tolist") else list(raw)
             result.append(SpeakerSegment(
                 segment_id=seg.segment_id,
                 start=seg.start,
