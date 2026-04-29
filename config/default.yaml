@@ -1,0 +1,29 @@
+engine:
+  segmenter: sherpa_onnx
+  asr: mlx_whisper
+
+models_dir: models/
+
+segmenter:
+  model: sherpa-onnx-pyannote-segmentation-3.0
+  # pyannote segmentation-3.0 ONNX (bundled in sherpa-onnx releases)
+
+embedder:
+  model: 3dspeaker_speech_campplus_sv_zh-cn_16k-common
+  # CAM++ speaker embedding model
+
+asr:
+  model: mlx-community/whisper-large-v3-mlx
+  # use whisper-base-mlx for fast dev iteration
+
+vad:
+  threshold: 0.5
+  min_speech_duration_ms: 250
+  min_silence_duration_ms: 100
+
+cluster:
+  threshold: 0.7        # cosine distance threshold for agglomerative clustering
+  min_cluster_size: 1
+
+cache_dir: .cache/
+output_dir: output/

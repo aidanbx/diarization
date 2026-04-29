@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.cache/
+models/
+output/
+.DS_Store
+*.wav
+!tests/fixtures/*.wav

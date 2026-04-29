@@ -1,0 +1,21 @@
+name: diarization
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+    - pydantic>=2.0
+    - typer>=0.12
+    - librosa>=0.10
+    - soundfile>=0.12
+    - numpy>=1.26
+    - scikit-learn>=1.4
+    - pyyaml>=6.0
+    - pytest>=8.0
+    - sherpa-onnx>=1.10
+    - mlx-whisper>=0.4
+    - huggingface-hub>=0.20
+    - tqdm>=4.66
+    - rich>=13.0
