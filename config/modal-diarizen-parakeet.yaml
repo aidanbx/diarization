@@ -1,0 +1,40 @@
+engine:
+  segmenter: modal_diarizen
+  asr: modal_parakeet
+
+models_dir: models/
+
+segmenter:
+  model: sherpa-onnx-pyannote-segmentation-3-0
+  remote_model: BUT-FIT/diarizen-wavlm-large-s80-md-v2
+
+embedder:
+  model: 3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx
+
+asr:
+  model: nvidia/parakeet-tdt-0.6b-v3
+  language:
+
+modal:
+  app_name: diarizer
+  volume_name: diarizer-cache
+  diarization_function: run_diarization
+  parakeet_function: run_parakeet_asr
+  whisper_function: run_whisper_asr
+
+elevenlabs:
+  api_key_env: ELEVENLABS_API_KEY
+  diarize: false
+  tag_audio_events: false
+
+vad:
+  threshold: 0.5
+  min_speech_duration_ms: 250
+  min_silence_duration_ms: 100
+
+cluster:
+  threshold: 0.7
+  min_cluster_size: 1
+
+cache_dir: .cache_modal_parakeet/
+output_dir: output_modal_parakeet/

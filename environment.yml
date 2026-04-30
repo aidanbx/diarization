@@ -8,7 +8,6 @@ dependencies:
   - pip:
     - pydantic>=2.0
     - typer>=0.12
-    - librosa>=0.10
     - soundfile>=0.12
     - numpy>=1.26
     - scikit-learn>=1.4
@@ -17,5 +16,6 @@ dependencies:
     - sherpa-onnx>=1.10
     - mlx-whisper>=0.4
     - huggingface-hub>=0.20
+    - modal>=1.1,<1.2
     - tqdm>=4.66
     - rich>=13.0

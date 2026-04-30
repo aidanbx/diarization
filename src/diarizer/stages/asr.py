@@ -7,6 +7,9 @@ from diarizer.schemas import AudioInput, WordTimestamps
 
 
 def run_asr(audio: np.ndarray, meta: AudioInput, engine: Asr) -> WordTimestamps:
-    result = engine.run(audio, meta.sample_rate)
+    if hasattr(engine, "run_input"):
+        result = engine.run_input(audio, meta)
+    else:
+        result = engine.run(audio, meta.sample_rate)
     result.audio_hash = meta.hash
     return result

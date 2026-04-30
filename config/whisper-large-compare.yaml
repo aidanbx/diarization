@@ -1,0 +1,26 @@
+engine:
+  segmenter: sherpa_onnx
+  asr: mlx_whisper
+
+models_dir: models/
+
+segmenter:
+  model: sherpa-onnx-pyannote-segmentation-3-0
+
+embedder:
+  model: 3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx
+
+asr:
+  model: mlx-community/whisper-large-v3-mlx
+
+vad:
+  threshold: 0.5
+  min_speech_duration_ms: 250
+  min_silence_duration_ms: 100
+
+cluster:
+  threshold: 0.7
+  min_cluster_size: 1
+
+cache_dir: .cache_large_compare/
+output_dir: output_large_compare/

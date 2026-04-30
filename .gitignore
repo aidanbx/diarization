@@ -2,8 +2,16 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .cache/
+.cache_large_compare/
+.cache_modal_parakeet/
+.cache_modal_whisper/
+.cache_modal_elevenlabs/
 models/
 output/
+output_large_compare/
+output_modal_parakeet/
+output_modal_whisper/
+output_modal_elevenlabs/
 data/
 .DS_Store
 .claude/

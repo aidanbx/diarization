@@ -36,28 +36,60 @@ class PipelineConfig(BaseModel):
     models_dir: str = "models/"
     cache_dir: str = ".cache/"
     output_dir: str = "output/"
+    segmenter_engine: str = "sherpa_onnx"
+    asr_engine: str = "mlx_whisper"
     segmenter_model: str = "sherpa-onnx-pyannote-segmentation-3-0/model.onnx"
+    diarization_model: str = "BUT-FIT/diarizen-wavlm-large-s80-md-v2"
     embedding_model: str = "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx"
     asr_model: str = "mlx-community/whisper-large-v3-mlx"
     language: str | None = None
     cluster_threshold: float = 0.7
     vad_threshold: float = 0.5
     num_speakers: int = -1
+    min_speakers: int = -1
+    max_speakers: int = -1
+    modal_app_name: str = "diarizer"
+    modal_volume_name: str = "diarizer-cache"
+    modal_diarization_function: str = "run_diarization"
+    modal_parakeet_function: str = "run_parakeet_asr"
+    modal_whisper_function: str = "run_whisper_asr"
+    elevenlabs_api_key_env: str = "ELEVENLABS_API_KEY"
+    elevenlabs_diarize: bool = False
+    elevenlabs_tag_audio_events: bool = False
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "PipelineConfig":
         raw = yaml.safe_load(Path(path).read_text())
         models_dir = raw.get("models_dir", "models/")
+        engine = raw.get("engine", {})
+        modal_cfg = raw.get("modal", {})
+        eleven_cfg = raw.get("elevenlabs", {})
+        asr_cfg = raw.get("asr", {})
+        segmenter_cfg = raw.get("segmenter", {})
         return cls(
             models_dir=models_dir,
             cache_dir=raw.get("cache_dir", ".cache/"),
             output_dir=raw.get("output_dir", "output/"),
-            segmenter_model=str(Path(models_dir) / raw["segmenter"]["model"] / "model.onnx"),
+            segmenter_engine=engine.get("segmenter", "sherpa_onnx"),
+            asr_engine=engine.get("asr", "mlx_whisper"),
+            segmenter_model=str(Path(models_dir) / segmenter_cfg.get("model", "sherpa-onnx-pyannote-segmentation-3-0") / "model.onnx"),
+            diarization_model=segmenter_cfg.get("remote_model", "BUT-FIT/diarizen-wavlm-large-s80-md-v2"),
             embedding_model=str(Path(models_dir) / raw["embedder"]["model"]),
-            asr_model=raw["asr"]["model"],
+            asr_model=asr_cfg.get("model", "mlx-community/whisper-large-v3-mlx"),
+            language=asr_cfg.get("language"),
             cluster_threshold=raw["cluster"]["threshold"],
             vad_threshold=raw["vad"]["threshold"],
             num_speakers=raw.get("num_speakers", -1),
+            min_speakers=raw.get("min_speakers", -1),
+            max_speakers=raw.get("max_speakers", -1),
+            modal_app_name=modal_cfg.get("app_name", "diarizer"),
+            modal_volume_name=modal_cfg.get("volume_name", "diarizer-cache"),
+            modal_diarization_function=modal_cfg.get("diarization_function", "run_diarization"),
+            modal_parakeet_function=modal_cfg.get("parakeet_function", "run_parakeet_asr"),
+            modal_whisper_function=modal_cfg.get("whisper_function", "run_whisper_asr"),
+            elevenlabs_api_key_env=eleven_cfg.get("api_key_env", "ELEVENLABS_API_KEY"),
+            elevenlabs_diarize=eleven_cfg.get("diarize", False),
+            elevenlabs_tag_audio_events=eleven_cfg.get("tag_audio_events", False),
         )
 
 
@@ -71,18 +103,74 @@ class Pipeline:
             return
         from diarizer.engines.sherpa_onnx import SherpaOnnxSegmenter, SherpaOnnxVad, SherpaOnnxEmbedder
         from diarizer.engines.mlx_whisper import MlxWhisperAsr
+        from diarizer.engines.modal_engines import ModalAsr, ModalDiarizationSegmenter
+        from diarizer.engines.elevenlabs_scribe import ElevenLabsScribeAsr
 
         cfg = self.cfg
         self._vad_engine = SherpaOnnxVad()
-        self._segmenter_engine = SherpaOnnxSegmenter(
-            segmentation_model=cfg.segmenter_model,
-            embedding_model=cfg.embedding_model,
-            num_speakers=cfg.num_speakers,
-            cluster_threshold=cfg.cluster_threshold,
-        )
         self._embedder_engine = SherpaOnnxEmbedder(model_path=cfg.embedding_model)
-        self._asr_engine = MlxWhisperAsr(model=cfg.asr_model, language=cfg.language)
+        self._segmenter_engine = self._make_segmenter_engine(
+            cfg,
+            SherpaOnnxSegmenter=SherpaOnnxSegmenter,
+            ModalDiarizationSegmenter=ModalDiarizationSegmenter,
+        )
+        self._asr_engine = self._make_asr_engine(
+            cfg,
+            MlxWhisperAsr=MlxWhisperAsr,
+            ModalAsr=ModalAsr,
+            ElevenLabsScribeAsr=ElevenLabsScribeAsr,
+        )
         self._engines_loaded = True
+
+    @staticmethod
+    def _make_segmenter_engine(cfg: PipelineConfig, **engines):
+        if cfg.segmenter_engine == "sherpa_onnx":
+            return engines["SherpaOnnxSegmenter"](
+                segmentation_model=cfg.segmenter_model,
+                embedding_model=cfg.embedding_model,
+                num_speakers=cfg.num_speakers,
+                cluster_threshold=cfg.cluster_threshold,
+            )
+        if cfg.segmenter_engine == "modal_diarizen":
+            return engines["ModalDiarizationSegmenter"](
+                app_name=cfg.modal_app_name,
+                function_name=cfg.modal_diarization_function,
+                volume_name=cfg.modal_volume_name,
+                model_id=cfg.diarization_model,
+                min_speakers=cfg.min_speakers,
+                max_speakers=cfg.max_speakers,
+            )
+        raise ValueError(f"Unknown segmenter engine: {cfg.segmenter_engine}")
+
+    @staticmethod
+    def _make_asr_engine(cfg: PipelineConfig, **engines):
+        if cfg.asr_engine == "mlx_whisper":
+            return engines["MlxWhisperAsr"](model=cfg.asr_model, language=cfg.language)
+        if cfg.asr_engine == "modal_parakeet":
+            return engines["ModalAsr"](
+                app_name=cfg.modal_app_name,
+                function_name=cfg.modal_parakeet_function,
+                volume_name=cfg.modal_volume_name,
+                model_id=cfg.asr_model,
+                language=cfg.language,
+            )
+        if cfg.asr_engine == "modal_whisper":
+            return engines["ModalAsr"](
+                app_name=cfg.modal_app_name,
+                function_name=cfg.modal_whisper_function,
+                volume_name=cfg.modal_volume_name,
+                model_id=cfg.asr_model,
+                language=cfg.language,
+            )
+        if cfg.asr_engine == "elevenlabs_scribe":
+            return engines["ElevenLabsScribeAsr"](
+                model=cfg.asr_model,
+                api_key_env=cfg.elevenlabs_api_key_env,
+                language=cfg.language,
+                diarize=cfg.elevenlabs_diarize,
+                tag_audio_events=cfg.elevenlabs_tag_audio_events,
+            )
+        raise ValueError(f"Unknown ASR engine: {cfg.asr_engine}")
 
     def run(self, audio_path: str | Path, skip_cache: bool = False) -> AlignedTranscript:
         audio_path = Path(audio_path)
@@ -107,19 +195,22 @@ class Pipeline:
             skip_cache,
         )
 
-        # Embed
-        embeddings = self._run_or_load(
-            cache_dir / "embed.json",
-            lambda: self._run_embed(audio, meta, raw_labels),
-            skip_cache,
-        )
+        if self.cfg.segmenter_engine == "modal_diarizen":
+            labels = raw_labels
+        else:
+            # Embed
+            embeddings = self._run_or_load(
+                cache_dir / "embed.json",
+                lambda: self._run_embed(audio, meta, raw_labels),
+                skip_cache,
+            )
 
-        # Cluster
-        labels = self._run_or_load(
-            cache_dir / "cluster.json",
-            lambda: self._run_cluster(embeddings),
-            skip_cache,
-        )
+            # Cluster
+            labels = self._run_or_load(
+                cache_dir / "cluster.json",
+                lambda: self._run_cluster(embeddings),
+                skip_cache,
+            )
 
         # ASR
         words = self._run_or_load(
@@ -158,9 +249,13 @@ class Pipeline:
         if stage == "segment":
             return self._run_segment(audio, meta)
         if stage == "embed":
+            if self.cfg.segmenter_engine == "modal_diarizen":
+                raise ValueError("Embed stage is not used when segmenter_engine=modal_diarizen.")
             raw_labels = _load_artifact(cache_dir / "segment.json", SpeakerLabels)
             return self._run_embed(audio, meta, raw_labels)
         if stage == "cluster":
+            if self.cfg.segmenter_engine == "modal_diarizen":
+                raise ValueError("Cluster stage is not used when segmenter_engine=modal_diarizen.")
             embeddings = _load_artifact(cache_dir / "embed.json", SpeakerEmbeddings)
             return self._run_cluster(embeddings)
         if stage == "asr":
@@ -180,6 +275,10 @@ class Pipeline:
 
     def _run_segment(self, audio: np.ndarray, meta: AudioInput) -> SpeakerLabels:
         """Use sherpa-onnx's full diarization to produce initial speaker labels."""
+        if hasattr(self._segmenter_engine, "run_labels"):
+            print(f"  [segment] running {self.cfg.segmenter_engine}...")
+            return self._segmenter_engine.run_labels(audio, meta)
+
         from diarizer.schemas import SpeakerLabel, SpeakerLabels
         print("  [segment] running sherpa-onnx diarization...")
         result = self._segmenter_engine.run_full(audio)

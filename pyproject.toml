@@ -1,0 +1,43 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "diarizer"
+version = "0.1.0"
+description = "Local and Modal-backed speaker diarization experiments."
+readme = "CLAUDE.md"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+  "huggingface-hub[hf-transfer]>=0.33,<0.34",
+  "mlx-whisper>=0.4,<0.5",
+  "numpy>=1.26,<2",
+  "pydantic>=2.0,<3",
+  "pyyaml>=6.0,<7",
+  "rich>=13.0,<14",
+  "scikit-learn>=1.4,<2",
+  "sherpa-onnx>=1.10,<2",
+  "soundfile>=0.12,<1",
+  "tqdm>=4.66,<5",
+  "typer>=0.12,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0,<9",
+]
+modal = [
+  "modal>=1.1,<1.2",
+]
+api = [
+  "elevenlabs>=1.10,<2",
+]
+
+[project.scripts]
+diarize = "diarizer.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/diarizer"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
