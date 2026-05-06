@@ -60,6 +60,8 @@ class ModalAsr(Asr):
         volume_name: str,
         model_id: str,
         language: str | None = None,
+        prompt: str | None = None,
+        keyterms: list[str] | None = None,
         skip_cache: bool = False,
     ):
         self._app_name = app_name
@@ -67,6 +69,8 @@ class ModalAsr(Asr):
         self._volume_name = volume_name
         self._model_id = model_id
         self._language = language
+        self._prompt = prompt
+        self._keyterms = keyterms or []
         self._skip_cache = skip_cache
 
     def run(self, audio: np.ndarray, sr: int) -> WordTimestamps:
@@ -81,6 +85,8 @@ class ModalAsr(Asr):
             audio_id=uploaded.hash,
             model_id=self._model_id,
             language=self._language,
+            initial_prompt=self._prompt,
+            hotwords=self._keyterms,
             skip_cache=self._skip_cache,
         )
         return WordTimestamps.model_validate(payload)

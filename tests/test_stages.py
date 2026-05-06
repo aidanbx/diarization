@@ -115,3 +115,39 @@ def test_align_empty_words():
     transcript = run_align(words, _make_labels())
     assert transcript.words == []
     assert transcript.turns == []
+
+
+def test_align_snaps_small_gap_to_neighbor():
+    from diarizer.stages.align import run_align
+
+    words = WordTimestamps(
+        words=[WordTimestamp(word="rain", start=5.02, end=5.18)],
+        language="en",
+        audio_hash="test",
+    )
+    transcript = run_align(words, _make_labels(), snap_threshold_s=0.25)
+    assert transcript.words[0].speaker_id == "SPEAKER_00"
+
+
+def test_align_repairs_unknown_between_same_speaker():
+    from diarizer.stages.align import run_align
+
+    labels = SpeakerLabels(
+        labels=[
+            SpeakerLabel(segment_id=0, start=0.0, end=1.0, speaker_id="SPEAKER_00"),
+            SpeakerLabel(segment_id=1, start=1.3, end=2.0, speaker_id="SPEAKER_00"),
+        ],
+        num_speakers=1,
+        audio_hash="test",
+    )
+    words = WordTimestamps(
+        words=[
+            WordTimestamp(word="look", start=0.1, end=0.3),
+            WordTimestamp(word="rain", start=1.05, end=1.1),
+            WordTimestamp(word="coming", start=1.4, end=1.7),
+        ],
+        language="en",
+        audio_hash="test",
+    )
+    transcript = run_align(words, labels, snap_threshold_s=0.15)
+    assert all(word.speaker_id == "SPEAKER_00" for word in transcript.words)

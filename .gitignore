@@ -4,13 +4,17 @@ __pycache__/
 .cache/
 .cache_large_compare/
 .cache_modal_parakeet/
+.cache_modal_parakeet_1_1b/
 .cache_modal_whisper/
+.cache_modal_whisper_hardrefs/
 .cache_modal_elevenlabs/
 models/
 output/
 output_large_compare/
 output_modal_parakeet/
+output_modal_parakeet_1_1b/
 output_modal_whisper/
+output_modal_whisper_hardrefs/
 output_modal_elevenlabs/
 data/
 .DS_Store

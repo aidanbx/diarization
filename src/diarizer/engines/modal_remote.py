@@ -83,7 +83,7 @@ def upload_audio(
         normalized = Path(tmp_dir) / f"{audio_id}.flac"
         _normalize_audio(src, normalized)
         duration_s = _probe_duration(normalized)
-        with volume.batch_upload(force=force) as batch:
+        with volume.batch_upload(force=True) as batch:
             batch.put_file(normalized, remote_path.as_posix())
             batch.put_file(
                 io.BytesIO(

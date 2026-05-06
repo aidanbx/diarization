@@ -8,8 +8,9 @@ Speaker diarization and transcription experiments with two execution paths:
 ## Current status
 
 - Local chunk extraction and local pipeline are working.
-- Modal-backed DiariZen + Whisper is working on the test chunks.
-- Modal-backed Parakeet and ElevenLabs Scribe are wired in as selectable backends, but only the Whisper path has been exercised end to end so far.
+- Modal-backed DiariZen + Whisper is working on the test chunks and the long-form file.
+- Whisper now supports prompt and keyterm hints in the Modal path.
+- Modal-backed Parakeet is wired in as a separate GPU image so it can evolve independently from the DiariZen runtime.
 
 ## Repository layout
 
@@ -54,6 +55,8 @@ Modal presets:
 
 - `config/modal-diarizen-whisper.yaml`
 - `config/modal-diarizen-parakeet.yaml`
+- `config/modal-diarizen-parakeet-1.1b.yaml`
+- `config/modal-diarizen-whisper-hardrefs.yaml`
 - `config/modal-diarizen-elevenlabs.yaml`
 
 Local presets:
@@ -75,6 +78,24 @@ Run the long file with the same backend:
 PYTHONPATH=src python -m diarizer.cli run --no-cache -c config/modal-diarizen-whisper.yaml "data/26-04-28 Contact #3.m4a"
 ```
 
+Run a hard-reference window with Whisper plus keyterm hints:
+
+```bash
+PYTHONPATH=src python -m diarizer.cli run --no-cache -c config/modal-diarizen-whisper-hardrefs.yaml "data/hard_sections/26-04-28_Contact_3_hard_refs_00h20m00s_to_00h28m30s.m4a"
+```
+
+Run the same window with Parakeet 1.1B:
+
+```bash
+PYTHONPATH=src python -m diarizer.cli run --no-cache -c config/modal-diarizen-parakeet-1.1b.yaml "data/hard_sections/26-04-28_Contact_3_hard_refs_00h20m00s_to_00h28m30s.m4a"
+```
+
+Extract the current hard comparison windows from the long file:
+
+```bash
+python scripts/extract_hard_sections.py "data/26-04-28 Contact #3.m4a"
+```
+
 Outputs are written under the configured `output_dir`, for example:
 
 - `output_modal_whisper/<audio_stem>/transcript.txt`
@@ -85,7 +106,9 @@ Outputs are written under the configured `output_dir`, for example:
 
 - Audio is normalized locally to 16 kHz mono FLAC and uploaded to the shared Modal volume.
 - DiariZen returns speaker labels directly, so the local embed-and-recluster path is skipped for `segmenter_engine=modal_diarizen`.
-- Whisper output quality is already much better than the earlier local `whisper-base` path, but alignment still produces some short `SPEAKER_UNK` fragments.
+- ASR runs on the full uploaded audio. Speaker labels are assigned afterward by timestamp alignment, so diarization is not pre-chopping the audio before transcription.
+- Alignment now snaps short out-of-segment words to nearby speaker spans and repairs some tiny `SPEAKER_UNK` islands, which helps the "one person speaking but split into unknown fragments" cases.
+- Remote cache keys now include model and prompt inputs so A/B tests do not accidentally reuse stale ASR results.
 
 ## Tests
 
@@ -96,6 +119,6 @@ conda run -n diarization env PYTHONPATH=src python -m pytest tests/test_pipeline
 
 ## Next improvements
 
-- Improve `align.py` to reduce `SPEAKER_UNK` fragments and over-segmentation
-- Benchmark Modal Whisper vs Modal Parakeet on the same chunks
+- Finish benchmarking Whisper vs Parakeet 1.1B on the extracted hard windows
+- Expand keyterm handling into a first-class CLI/config workflow
 - Add a direct comparison command for multiple backend outputs

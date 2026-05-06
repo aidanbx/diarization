@@ -15,6 +15,28 @@ def test_modal_parakeet_config_parses():
     assert cfg.asr_model == "nvidia/parakeet-tdt-0.6b-v3"
 
 
+def test_modal_parakeet_1_1b_config_parses():
+    from diarizer.pipeline import PipelineConfig
+
+    cfg = PipelineConfig.from_yaml(Path(__file__).parent.parent / "config" / "modal-diarizen-parakeet-1.1b.yaml")
+
+    assert cfg.segmenter_engine == "modal_diarizen"
+    assert cfg.asr_engine == "modal_parakeet"
+    assert cfg.asr_model == "nvidia/parakeet-tdt-1.1b"
+    assert cfg.language == "en"
+
+
+def test_modal_whisper_hardrefs_config_parses():
+    from diarizer.pipeline import PipelineConfig
+
+    cfg = PipelineConfig.from_yaml(Path(__file__).parent.parent / "config" / "modal-diarizen-whisper-hardrefs.yaml")
+
+    assert cfg.segmenter_engine == "modal_diarizen"
+    assert cfg.asr_engine == "modal_whisper"
+    assert "Tyler Alterman" in cfg.asr_keyterms
+    assert cfg.asr_prompt is not None
+
+
 def test_elevenlabs_config_parses():
     from diarizer.pipeline import PipelineConfig
 

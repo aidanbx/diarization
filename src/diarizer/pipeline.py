@@ -17,7 +17,7 @@ from typing import Any
 
 import numpy as np
 import yaml
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from diarizer.io.audio import load_audio
 from diarizer.io.output import write_json, write_srt, write_txt
@@ -43,11 +43,14 @@ class PipelineConfig(BaseModel):
     embedding_model: str = "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx"
     asr_model: str = "mlx-community/whisper-large-v3-mlx"
     language: str | None = None
+    asr_prompt: str | None = None
+    asr_keyterms: list[str] = Field(default_factory=list)
     cluster_threshold: float = 0.7
     vad_threshold: float = 0.5
     num_speakers: int = -1
     min_speakers: int = -1
     max_speakers: int = -1
+    align_snap_threshold_s: float = 0.35
     modal_app_name: str = "diarizer"
     modal_volume_name: str = "diarizer-cache"
     modal_diarization_function: str = "run_diarization"
@@ -66,6 +69,9 @@ class PipelineConfig(BaseModel):
         eleven_cfg = raw.get("elevenlabs", {})
         asr_cfg = raw.get("asr", {})
         segmenter_cfg = raw.get("segmenter", {})
+        keyterms = asr_cfg.get("keyterms", [])
+        if isinstance(keyterms, str):
+            keyterms = [term.strip() for term in keyterms.split(",") if term.strip()]
         return cls(
             models_dir=models_dir,
             cache_dir=raw.get("cache_dir", ".cache/"),
@@ -77,11 +83,14 @@ class PipelineConfig(BaseModel):
             embedding_model=str(Path(models_dir) / raw["embedder"]["model"]),
             asr_model=asr_cfg.get("model", "mlx-community/whisper-large-v3-mlx"),
             language=asr_cfg.get("language"),
+            asr_prompt=asr_cfg.get("prompt"),
+            asr_keyterms=keyterms,
             cluster_threshold=raw["cluster"]["threshold"],
             vad_threshold=raw["vad"]["threshold"],
             num_speakers=raw.get("num_speakers", -1),
             min_speakers=raw.get("min_speakers", -1),
             max_speakers=raw.get("max_speakers", -1),
+            align_snap_threshold_s=float(raw.get("align", {}).get("snap_threshold_s", 0.35)),
             modal_app_name=modal_cfg.get("app_name", "diarizer"),
             modal_volume_name=modal_cfg.get("volume_name", "diarizer-cache"),
             modal_diarization_function=modal_cfg.get("diarization_function", "run_diarization"),
@@ -97,6 +106,12 @@ class Pipeline:
     def __init__(self, config: PipelineConfig):
         self.cfg = config
         self._engines_loaded = False
+
+    def _set_remote_skip_cache(self, skip_cache: bool) -> None:
+        for name in ("_segmenter_engine", "_asr_engine"):
+            engine = getattr(self, name, None)
+            if engine is not None and hasattr(engine, "_skip_cache"):
+                engine._skip_cache = skip_cache
 
     def _load_engines(self) -> None:
         if self._engines_loaded:
@@ -153,6 +168,8 @@ class Pipeline:
                 volume_name=cfg.modal_volume_name,
                 model_id=cfg.asr_model,
                 language=cfg.language,
+                prompt=cfg.asr_prompt,
+                keyterms=cfg.asr_keyterms,
             )
         if cfg.asr_engine == "modal_whisper":
             return engines["ModalAsr"](
@@ -161,6 +178,8 @@ class Pipeline:
                 volume_name=cfg.modal_volume_name,
                 model_id=cfg.asr_model,
                 language=cfg.language,
+                prompt=cfg.asr_prompt,
+                keyterms=cfg.asr_keyterms,
             )
         if cfg.asr_engine == "elevenlabs_scribe":
             return engines["ElevenLabsScribeAsr"](
@@ -180,6 +199,7 @@ class Pipeline:
         cache_dir.mkdir(parents=True, exist_ok=True)
 
         self._load_engines()
+        self._set_remote_skip_cache(skip_cache)
 
         # VAD
         speech = self._run_or_load(
@@ -243,6 +263,7 @@ class Pipeline:
         cache_dir = Path(self.cfg.cache_dir) / meta.hash
         cache_dir.mkdir(parents=True, exist_ok=True)
         self._load_engines()
+        self._set_remote_skip_cache(False)
 
         if stage == "vad":
             return self._run_vad(audio, meta)
@@ -262,7 +283,8 @@ class Pipeline:
             return self._run_asr(audio, meta)
         if stage == "align":
             words = _load_artifact(cache_dir / "asr.json", WordTimestamps)
-            labels = _load_artifact(cache_dir / "cluster.json", SpeakerLabels)
+            label_path = cache_dir / ("segment.json" if self.cfg.segmenter_engine == "modal_diarizen" else "cluster.json")
+            labels = _load_artifact(label_path, SpeakerLabels)
             return self._run_align(words, labels)
         raise ValueError(f"Unknown stage: {stage}")
 
@@ -310,7 +332,7 @@ class Pipeline:
     def _run_align(self, words: WordTimestamps, labels: SpeakerLabels) -> AlignedTranscript:
         from diarizer.stages.align import run_align
         print("  [align] aligning words to speakers...")
-        return run_align(words, labels)
+        return run_align(words, labels, snap_threshold_s=self.cfg.align_snap_threshold_s)
 
     # ── cache helpers ────────────────────────────────────────────────────────
 
